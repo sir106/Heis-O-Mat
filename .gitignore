@@ -1,0 +1,15 @@
+node_modules/
+*:Zone.Identifier
+.env
+.log
+.tmp
+.pdf
+.venv/
+cookiejar.json
+test.html
+ct/
+ct-foto/
+ix/
+make/
+tr/
+downloads/

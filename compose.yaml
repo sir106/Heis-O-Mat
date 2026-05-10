@@ -1,0 +1,87 @@
+# Stack Name: heise-scraper
+# Description: regelmäßiger Download aller Heise+ Ausgaben
+#
+services:
+  # -----------------------------
+  # heise-downloader
+  # -----------------------------
+  # GitHub: https://github.com/weese/dl_for_heise
+  # DockerHub:
+  # Doku:
+  # Howto:
+  #
+  heise-downloader:
+    image: alpine:latest
+    container_name: heise_dl
+    restart: on-failure:5
+
+    volumes:
+      # VOLUMES default
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+      # VOLUMES heise-downloader
+      - /mnt/proxshare/lib-downloads/heise:/downloads
+
+    environment:
+      # ENVIRONMENT default
+      - TZ=Europe/Berlin
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+
+      # ENVIRONMENT XYZ
+      - HEISE_USERNAME=${HEISE_USERNAME}
+      - HEISE_PASSWORD=${HEISE_PASSWORD}
+      - REPO_URL=${REPO_URL:-https://github.com/weese/dl_for_heise}
+      - DOWNLOAD_DIR=${DOWNLOAD_DIR:-/downloads}
+      - APPRISE_URL=${APPRISE_URL}
+    env_file:
+      - .env
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        # 1. Pakete installieren
+        apk add --no-cache git curl bash coreutils ca-certificates python3 py3-pip py3-requests python3-dotenv;
+        update-ca-certificates;
+
+        # 2. Repo klonen
+        mkdir -p /app
+        if [ ! -d '/app/.git' ]; then
+          git clone $${REPO_URL} /app;
+        fi
+        chmod +x /app/download.sh;
+
+        # 3. Credentials schreiben
+        # Beachte: Die Variablen müssen im env_file oder System definiert sein
+        echo "$${HEISE_USERNAME}:$${HEISE_PASSWORD}" > /app/.creds
+        chmod 600 /app/.creds
+
+        # 4. Hilfsskript erstellen
+        echo '#!/bin/bash' > /usr/local/bin/run_download.sh
+        echo 'cd /downloads && /app/download.sh -v ct $$(date +%Y) >> /downloads/download_console.log 2>&1' >> /usr/local/bin/run_download.sh
+        echo 'cd /downloads && /app/download.sh -v ix $$(date +%Y) >> /downloads/download_console.log 2>&1' >> /usr/local/bin/run_download.sh
+        echo 'cd /downloads && /app/download.sh -v make $$(date +%Y) >> /downloads/download_console.log 2>&1' >> /usr/local/bin/run_download.sh
+        echo 'cd /downloads && /app/download.sh -v tr $$(date +%Y) >> /downloads/download_console.log 2>&1' >> /usr/local/bin/run_download.sh
+        echo 'cd /downloads && /app/download.sh -v mac-and-i $$(date +%Y) >> /downloads/download_console.log 2>&1' >> /usr/local/bin/run_download.sh
+        echo 'cd /downloads && /app/download.sh -v ct-foto $$(date +%Y) >> /downloads/download_console.log 2>&1' >> /usr/local/bin/run_download.sh
+
+        chmod +x /usr/local/bin/run_download.sh
+
+        # 5. Cronjob einrichten
+        mkdir -p /var/spool/cron/crontabs
+        echo "0 3 * * 1 /usr/local/bin/run_download.sh" > /var/spool/cron/crontabs/root
+
+        echo "Heise Downloader bereit. Starte initialen Download im Hintergrund..."
+        # /usr/local/bin/run_download.sh &
+
+        # Crond im Vordergrund
+        exec crond -f -l 2
+
+# ------------------------------
+# Volumes
+# ------------------------------
+
+# ------------------------------
+# Networks
+# ------------------------------
