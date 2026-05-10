@@ -6,6 +6,8 @@ This project origins from AlexanderMelde's repository (https://github.com/Alexan
 
 You will need an active Heise+ subscription to download anything. This is just an alternative to clicking buttons in your browser.
 
+Start Page for all available magazines from heise+ https://www.heise.de/select.
+
 ## Prerequisites
 
 - Python 3.6 or higher

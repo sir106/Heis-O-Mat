@@ -26,7 +26,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 MIN_PDF_SIZE = 5000000  # 5MB
 WAIT_TIME = 80
 MAX_TRIES = 3
-MAX_ISSUES = 27
 DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", "/downloads")
 APPRISE_URL = os.environ.get("APPRISE_URL")
 
@@ -64,7 +63,7 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 def setup_logger(verbose):
-    logger = logging.getLogger('heise_dl')
+    logger = logging.getLogger('Heis-O-Mat')
     logger.setLevel(logging.DEBUG if verbose else logging.INFO)
 
     ch = logging.StreamHandler()
@@ -194,13 +193,24 @@ def main():
     match args.magazine.upper():
         case "CT":
             MAX_ISSUES=27
+            MAGAZIN_NAME="c't"
         case "TR":
             MAX_ISSUES=8
+            MAGAZIN_NAME="MIT Technology Review"
         case "IX":
             MAX_ISSUES=13
+            MAGAZIN_NAME="iX"
         case "MAKE":
+            MAGAZIN_NAME="Make"
+            MAX_ISSUES=7
+        case "ct-foto":
+            MAGAZIN_NAME="c't Fotografie"
+            MAX_ISSUES=7
+        case "mac-and-i":
+            MAGAZIN_NAME="Mac & i"
             MAX_ISSUES=7
         case _:
+            MAGAZIN_NAME="heise+ magazine"
             MAX_ISSUES=27
 
     logger.debug(f"Setting MAX_ISSUES to {MAX_ISSUES} for {args.magazine.upper()}..")
@@ -214,14 +224,14 @@ def main():
 
         for i in range(1, MAX_ISSUES + 1):
             issue_str = f"{i:02d}"
-            base_dir = Path(DOWNLOAD_DIR) / args.magazine / str(year)
-            base_path = base_dir / f"{args.magazine}.{year}.{issue_str}.pdf"
+            base_dir = Path(DOWNLOAD_DIR) / MAGAZIN_NAME / (MAGAZIN_NAME + " " + str(year))
+            base_path = base_dir / f"{MAGAZIN_NAME}.{year}.{issue_str}.pdf"
 
             log_pfx = f"[{args.magazine}][{year}/{issue_str}]"
 
             if base_path.exists():
-                logger.warning(f"{log_pfx} Already exists ({base_path}).") # mapped to SKIP
                 count_skip += 1
+                logger.warning(f"{log_pfx} Already exists ({base_path}).") # mapped to SKIP
                 continue
 
             base_dir.mkdir(parents=True, exist_ok=True)
@@ -256,7 +266,7 @@ def main():
                         if args.verbose:
                             # New line to clear the downloading text when debugging
                             sys.stdout.write("\n")
-                            logger.debug(f"{log_pfx} Starting download ({download_url})..")
+                            logger.debug(f"{log_pfx} Starting download ({download_url}) to {base_path}..")
 
                         pdf_res = session.get(download_url, verify=False, stream=True)
 
