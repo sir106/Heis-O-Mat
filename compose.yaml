@@ -43,7 +43,8 @@ services:
       - -c
       - |
         echo ============" Init heis-o-mat ============"
-        # 1. Install packages
+
+        # Install packages
         echo "[INIT] Installing packages..."
         apk add --no-cache git curl bash coreutils ca-certificates python3 py3-pip py3-requests py3-dotenv;
         update-ca-certificates;
@@ -61,14 +62,7 @@ services:
         echo "[INIT] Making start-downloads.sh executable..."
         chmod +x /app/start-downloads.sh;
 
-        # 4. Create helper script
-        echo "[INIT] Setting up helper script..."
-        echo '#!/bin/bash' > /usr/local/bin/run_download.sh
-        echo 'cd /downloads && /app/start-downloads.sh' >> /usr/local/bin/run_download.sh
-        chmod +x /usr/local/bin/run_download.sh
-        echo "Helper script ready."
-
-        # 5. Setup cronjob
+        # 3. Setup cronjob
         echo "[INIT] Configuring cronjob..."
         mkdir -p /var/spool/cron/crontabs
         echo "0 3 * * 1 /usr/local/bin/run_download.sh" > /var/spool/cron/crontabs/root
@@ -76,7 +70,7 @@ services:
 
         echo ============" Initialization finished. heis-o-mat ready ============"
         echo "Starting initial download in the background..."
-        /usr/local/bin/run_download.sh &
+        /app/start-downloads.sh &
 
         # Crond in foreground
         exec crond -f -l 2

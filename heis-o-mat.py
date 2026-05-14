@@ -293,7 +293,7 @@ def main():
                         base_path.write_bytes(content)
 
                         # Log history
-                        history_log = Path(DOWNLOAD_DIR) / "download_history.log"
+                        history_log = Path(DOWNLOAD_DIR) / "heis-o-mat_download_history.log"
                         with open(history_log, "a") as f:
                             timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
                             f.write(f"{timestamp} - {log_pfx} Successfully downloaded: {base_path} - Source: {download_url}\n")
