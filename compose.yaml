@@ -62,11 +62,14 @@ services:
         echo "[INIT] Making start-downloads.sh executable..."
         chmod +x /app/start-downloads.sh;
 
+        # Docker-Umgebungsvariablen für Cron verfügbar machen
+        printenv > /etc/environment
+
         # 3. Setup cronjob
         echo "[INIT] Configuring cronjob..."
         mkdir -p /var/spool/cron/crontabs
-        echo "0 3 * * 1 /usr/local/bin/run_download.sh" > /var/spool/cron/crontabs/root
-        echo "Cronjob configured."
+        echo "0 9 * * 6 /usr/local/bin/run_download.sh" > /var/spool/cron/crontabs/root
+        echo "Cronjob configured (Sat 09:00)."
 
         echo ============" Initialization finished. heis-o-mat ready ============"
         echo "Starting initial download in the background..."
