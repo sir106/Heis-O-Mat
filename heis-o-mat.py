@@ -250,8 +250,8 @@ def main():
 
             success = False
             for try_num in range(1, MAX_TRIES + 1):
-                 logger.info(f"{log_pfx} [Try {try_num}/{MAX_TRIES}] Downloading...\r")
-                 download_url = f"https://www.heise.de/select/{args.magazine}/archiv/{year}/{i}/download"
+                logger.info(f"{log_pfx} [Try {try_num}/{MAX_TRIES}] Downloading...\r")
+                download_url = f"https://www.heise.de/select/{args.magazine}/archiv/{year}/{i}/download"
 
                 try:
                     while True:
