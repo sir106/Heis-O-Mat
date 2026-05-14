@@ -75,16 +75,12 @@ def setup_logger(verbose):
     logger.addHandler(ch)
     return logger
 
-def sleepbar(duration, prefix="Waiting for retry..."):
-    pstr = "[=============================================================]"
-    sys.stdout.write('\n') # Newline before bar to not overwrite previous text without carriage return
-    for i in range(1, duration + 1):
+def sleepbar(wait_seconds, prefix="Waiting"):
+    print(f"{prefix}: ", end="", flush=True)
+    for _ in range(wait_seconds):
         time.sleep(1)
-        pd = int(i * len(pstr) / duration)
-        sys.stdout.write(f"\r{prefix} {i}/{duration}s - {pstr[:pd]}")
-        sys.stdout.flush()
-    sys.stdout.write("\r\033[2K")
-    sys.stdout.flush()
+        print(".", end="", flush=True)
+    print(" [Done]")
 
 def send_apprise_notification(title, body, msg_type="info", logger=None):
     if not APPRISE_URL:
