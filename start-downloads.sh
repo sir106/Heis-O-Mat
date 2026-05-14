@@ -7,9 +7,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 cd "$SCRIPT_DIR"
 
 # Run the python script, passing all arguments to it
-python3 heise-download.py -v tr "$@"
-python3 heise-download.py -v make "$@"
+#echo [START] Starting download for "Technology Review..."
+#python3 heis-o-mat.py -v tr "$@"
+
+#echo [START] Starting download for "Make..."
+#python3 heise-download.py -v make "$@"
+
+echo [START] Starting download for "c't..."
 python3 heise-download.py -v ct "$@"
-python3 heise-download.py -v ix "$@"
-python3 heise-download.py -v ct-foto "$@"
-python3 heise-download.py -v mac-and-i "$@"
+
+#echo [START] Starting download for "IX..."
+#python3 heise-download.py -v ix "$@"
+
+#echo [START] Starting download for "C't Foto..."
+#python3 heise-download.py -v ct-foto "$@"
+
+#echo [START] Starting download for "Mac & I..."
+#python3 heise-download.py -v mac-and-i "$@"

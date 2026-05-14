@@ -1,6 +1,6 @@
 # Downloader for Heise Magazines
 
-This is a Python script (`heise-download.py`) to download magazines as PDF files from https://www.heise.de/select. It replaces the legacy bash script implementation.
+This is a Python script (`heis-o-mat.py`) to download magazines as PDF files from https://www.heise.de/select. It replaces the legacy bash script implementation.
 
 This project origins from AlexanderMelde's repository (https://github.com/AlexanderMelde/dl_for_heise).
 
@@ -42,22 +42,22 @@ APPRISE_URL=apprise://...  # Optional notification URL
 Run the script from your terminal:
 
 ```bash
-python3 heise-download.py [-v] <magazine> <start_year> [end_year]
+python3 heis-o-mat.py [-v] <magazine> <start_year> [end_year]
 ```
 
 ### Examples
 
 - **Download all issues of the magazine c't from the year 2021:**
   ```bash
-  python3 heise-download.py ct 2021
+  python3 heis-o-mat.py ct 2021
   ```
 - **Download all c't magazines between 2014 and 2022:**
   ```bash
-  python3 heise-download.py ct 2014 2022
+  python3 heis-o-mat.py ct 2014 2022
   ```
 - **Display additional verbose console output:**
   ```bash
-  python3 heise-download.py -v ct 2014 2022
+  python3 heis-o-mat.py -v ct 2014 2022
   ```
 
 You will find all downloaded PDF files in subfolders divided by magazine name and year inside your specified `DOWNLOAD_DIR`.
