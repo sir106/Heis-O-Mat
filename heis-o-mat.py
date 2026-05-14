@@ -199,10 +199,10 @@ def main():
         case "MAKE":
             MAGAZIN_NAME="Make"
             MAX_ISSUES=7
-        case "ct-foto":
+        case "CT-FOTO":
             MAGAZIN_NAME="c't Fotografie"
             MAX_ISSUES=7
-        case "mac-and-i":
+        case "MAC-AND-I":
             MAGAZIN_NAME="Mac & i"
             MAX_ISSUES=7
         case _:
