@@ -64,10 +64,10 @@ class ColoredFormatter(logging.Formatter):
 
 def setup_logger(verbose):
     logger = logging.getLogger('Heis-O-Mat')
-    logger.setLevel(logging.DEBUG if verbose else logger.info)
+    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
 
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG if verbose else logger.info)
+    ch.setLevel(logging.DEBUG if verbose else logging.INFO)
 
     formatter = ColoredFormatter('%(levelname)s %(message)s')
     ch.setFormatter(formatter)
@@ -76,6 +76,7 @@ def setup_logger(verbose):
     return logger
 
 def sleepbar(wait_seconds, prefix="Waiting"):
+    logger = logging.getLogger('Heis-O-Mat')
     logger.info(f"{prefix} started ({wait_seconds}s)...")
     time.sleep(wait_seconds)
     logger.info(f"{prefix} finished.")
@@ -131,11 +132,12 @@ def main():
 
     masked_user = heise_username[:2] + "*" * (len(heise_username) - 4) + heise_username[-2:] if len(heise_username) > 4 else "***"
 
-    logger.info("Starting Up...")
+    logger.info("----------- Heis-O-Mat Starting Up -----------")
     logger.info(f"[SETTINGS] (DOWNLOAD_DIR) Target download directory : {DOWNLOAD_DIR}")
     logger.info(f"[SETTINGS] (APPRISE_URL) Apprise URL                : {APPRISE_URL}")
     logger.info(f"[SETTINGS] (HEISE_USERNAME) Username for Login      : {masked_user}")
-    logger.info(f"Sending login request as User {masked_user} to heise.de...")
+    if args.verbose:
+        logger.info(f"Sending login request as User {masked_user} to heise.de...")
 
     login_data = {
         "username": heise_username,
@@ -165,20 +167,20 @@ def main():
     token1 = tokens[0]
     token2 = tokens[1] if len(tokens) > 1 else None
 
-    logger.info("Login successful. Extracted tokens, performing SSO remote logins...")
+    if args.verbose:
+        logger.info("Login successful. Extracted tokens, performing SSO remote logins...")
 
     try:
         session.post("https://m.heise.de/sso/login/remote-login", data={"token": token1}, verify=False)
         if token2 and token2 != token1:
-            logger.info("Performing secondary SSO shop login...")
+            if args.verbose:
+                logger.info("Performing secondary SSO shop login...")
             session.post("https://shop.heise.de/customer/account/loginRemote", data={"token": token2}, verify=False)
     except Exception as e:
         msg = f"SSO remote login failed: {e}"
         logger.error(msg)
         send_apprise_notification("Heise+ Login Error", msg, "error", logger)
         sys.exit(1)
-
-    logger.info("[\033[0;32mSUCCESS\033[0m] Login phase completed.")
 
     count_success = 0
     count_fail = 0
@@ -238,7 +240,8 @@ def main():
                 if args.verbose:
                     logger.warning(f"{log_pfx} Issue might not (yet) exist - Thumbnail ({thumb_url}) not found (HTTP {thumb_res.status_code}).")
                 if missing_consecutive >= 3:
-                    logger.info(f"Stopping year {year}: 3 consecutive issues missing.")
+                    if args.verbose:
+                        logger.info(f"Stopping year {year}: 3 consecutive issues missing.")
                     break # Exit the issue loop (i) and move to next year
                 continue
 
@@ -250,7 +253,8 @@ def main():
 
             success = False
             for try_num in range(1, MAX_TRIES + 1):
-                logger.info(f"{log_pfx} [Try {try_num}/{MAX_TRIES}] Downloading...\r")
+                if args.verbose:
+                    logger.info(f"{log_pfx} [Try {try_num}/{MAX_TRIES}] Downloading...\r")
                 download_url = f"https://www.heise.de/select/{args.magazine}/archiv/{year}/{i}/download"
 
                 try:
@@ -319,9 +323,7 @@ def main():
 
                 count_fail += 1
 
-    logger.info(f"----------- Summary: {count_success} ok, {count_fail} failed, {count_skip} skipped. "-----------")
-
-    logger.info("Done!")
+    logger.info(f"----------- Heis-O-Mat has finished! {count_success} ok, {count_fail} failed, {count_skip} skipped. -----------")
 
 if __name__ == "__main__":
     main()
