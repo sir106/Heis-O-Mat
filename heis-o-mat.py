@@ -178,7 +178,7 @@ def main():
         send_apprise_notification("Heise+ Login Error", msg, "error", logger)
         sys.exit(1)
 
-    print("[\033[0;32mSUCCESS\033[0m] Login phase completed.")
+    logger.info("[\033[0;32mSUCCESS\033[0m] Login phase completed.")
 
     count_success = 0
     count_fail = 0
@@ -250,17 +250,14 @@ def main():
 
             success = False
             for try_num in range(1, MAX_TRIES + 1):
-                sys.stdout.write(f"{log_pfx} [Try {try_num}/{MAX_TRIES}] Downloading...\r")
-                sys.stdout.flush()
+                 logger.info(f"{log_pfx} [Try {try_num}/{MAX_TRIES}] Downloading...\r")
 
                 download_url = f"https://www.heise.de/select/{args.magazine}/archiv/{year}/{i}/download"
 
                 try:
                     while True:
                         if args.verbose:
-                            # New line to clear the downloading text when debugging
-                            sys.stdout.write("\n")
-                            logger.debug(f"{log_pfx} Starting download ({download_url}) to {base_path}..")
+                            logger.debug(f"\n{log_pfx} Starting download ({download_url}) to {base_path}..")
 
                         pdf_res = session.get(download_url, verify=False, stream=True)
 
@@ -283,7 +280,7 @@ def main():
                             break
 
                     if size > MIN_PDF_SIZE:
-                        sys.stdout.write(f"\n{log_pfx} [\033[0;32mSUCCESS\033[0m] Done ({size // 1024 // 1024} MB)\n")
+                        logger.info(f"\n{log_pfx} [\033[0;32mSUCCESS\033[0m] Done ({size // 1024 // 1024} MB)\n")
                         base_path.write_bytes(content)
 
                         # Log history
@@ -303,16 +300,16 @@ def main():
                         count_success += 1
                         break
                     else:
-                        sys.stdout.write(f"\n{log_pfx} [\033[0;31mERROR\033[0m] Download failed or not a PDF (Size: {size} Bytes)\n")
+                        logger.error(f"\n{log_pfx} Download failed or not a PDF (Size: {size} Bytes)\n")
 
                 except Exception as e:
-                    sys.stdout.write(f"\n{log_pfx} [\033[0;31mERROR\033[0m] Request exception: {e}\n")
+                    logger.error(f"\n{log_pfx} Request exception: {e}\n")
 
                 if try_num < MAX_TRIES:
                     sleepbar(WAIT_TIME)
 
             if not success:
-                sys.stdout.write(f"{log_pfx} [\033[0;31mERROR\033[0m] Download failed after {MAX_TRIES} attempts.\n")
+                logger.error(f"{log_pfx} [\033[0;31mERROR\033[0m] Download failed after {MAX_TRIES} attempts.\n")
 
                 send_apprise_notification(
                     title=f"Heise+ Download Error: {args.magazine.upper()} {year}/{i:02d}",
