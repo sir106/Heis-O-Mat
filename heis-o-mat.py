@@ -64,10 +64,10 @@ class ColoredFormatter(logging.Formatter):
 
 def setup_logger(verbose):
     logger = logging.getLogger('Heis-O-Mat')
-    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
+    logger.setLevel(logging.DEBUG if verbose else logger.info)
 
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG if verbose else logging.INFO)
+    ch.setLevel(logging.DEBUG if verbose else logger.info)
 
     formatter = ColoredFormatter('%(levelname)s %(message)s')
     ch.setFormatter(formatter)
@@ -76,9 +76,9 @@ def setup_logger(verbose):
     return logger
 
 def sleepbar(wait_seconds, prefix="Waiting"):
-    logging.info(f"{prefix} started ({wait_seconds}s)...")
+    logger.info(f"{prefix} started ({wait_seconds}s)...")
     time.sleep(wait_seconds)
-    logging.info(f"{prefix} finished.")
+    logger.info(f"{prefix} finished.")
 
 def send_apprise_notification(title, body, msg_type="info", logger=None):
     if not APPRISE_URL:
@@ -323,8 +323,7 @@ def main():
 
                 count_fail += 1
 
-    print("\n---------------------------------------------------------------")
-    print(f"Summary: {count_success} ok, {count_fail} failed, {count_skip} skipped.")
+     logger.info(f"----------- Summary: {count_success} ok, {count_fail} failed, {count_skip} skipped. "-----------")
 
     logger.info("Done!")
 
