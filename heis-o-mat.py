@@ -319,7 +319,7 @@ def main():
 
                 count_fail += 1
 
-     logger.info(f"----------- Summary: {count_success} ok, {count_fail} failed, {count_skip} skipped. "-----------")
+    logger.info(f"----------- Summary: {count_success} ok, {count_fail} failed, {count_skip} skipped. "-----------")
 
     logger.info("Done!")
 
