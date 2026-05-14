@@ -36,6 +36,7 @@ services:
       - REPO_URL=${REPO_URL:-https://github.com/sir106/Heis-O-Mat}
       - DOWNLOAD_DIR=${DOWNLOAD_DIR:-/downloads}
       - APPRISE_URL=${APPRISE_URL}
+      - RUN_ON_STARTUP=${RUN_ON_STARTUP:-true}
       - CRON_SCHEDULE=${CRON_SCHEDULE:-"0 10 * * 6"}
     env_file:
       - .env
@@ -52,7 +53,7 @@ services:
         echo "Packages installed successfully."
 
         # Cron_Schedule Setzen
-        CRON_SCHEDULE=${CRON_SCHEDULE:-"0 10 * * 6"}
+        CRON_SCHEDULE=$${CRON_SCHEDULE:-"0 10 * * 6"}
 
         # 2. Clone repo
         echo "[INIT] Checking for repository at /app..."
@@ -72,12 +73,17 @@ services:
         # 3. Setup cronjob
         echo "[INIT] Configuring cronjob..."
         mkdir -p /var/spool/cron/crontabs
-        echo "$CRON_SCHEDULE /app/start-downloads.sh > /proc/1/fd/1 2>&1" > /var/spool/cron/crontabs/root
+        echo "$$CRON_SCHEDULE /app/start-downloads.sh > /proc/1/fd/1 2>&1" > /var/spool/cron/crontabs/root
         echo "Cronjob configured ($CRON_SCHEDULE)."
 
 
         echo "Starting initial download in the background..."
-        /app/start-downloads.sh &
+        if [ "$${RUN_ON_STARTUP}" = "true" ]; then
+          echo "Starting initial download in the background..."
+          /app/start-downloads.sh &
+        else
+          echo "Skipping initial download on startup (RUN_ON_STARTUP=$${RUN_ON_STARTUP})"
+        fi
 
         echo ============" Initialization finished. heis-o-mat ready ============"
 
