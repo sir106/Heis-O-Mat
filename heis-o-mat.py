@@ -76,11 +76,9 @@ def setup_logger(verbose):
     return logger
 
 def sleepbar(wait_seconds, prefix="Waiting"):
-    print(f"{prefix}: ", end="", flush=True)
-    for _ in range(wait_seconds):
-        time.sleep(1)
-        print(".", end="", flush=True)
-    print(" [Done]")
+    logging.info(f"{prefix} started ({wait_seconds}s)...")
+    time.sleep(wait_seconds)
+    logging.info(f"{prefix} finished.")
 
 def send_apprise_notification(title, body, msg_type="info", logger=None):
     if not APPRISE_URL:
