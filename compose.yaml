@@ -76,8 +76,6 @@ services:
         echo "$$CRON_SCHEDULE /app/start-downloads.sh > /proc/1/fd/1 2>&1" > /var/spool/cron/crontabs/root
         echo "Cronjob configured ($CRON_SCHEDULE)."
 
-
-        echo "Starting initial download in the background..."
         if [ "$${RUN_ON_STARTUP}" = "true" ]; then
           echo "Starting initial download in the background..."
           /app/start-downloads.sh &
