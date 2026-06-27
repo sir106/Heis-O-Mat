@@ -32,7 +32,3 @@ jobs:
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          # PyPI token is configured in the 'pypi' environment settings
-          # See: https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
-          # See: https://docs.pypi.org/trusted-publishers/using-a-trusted-publisher/
