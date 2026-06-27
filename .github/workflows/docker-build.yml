@@ -46,7 +46,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./docker
           file: ./docker/Dockerfile
           # Pusht nur bei echten Push-Events auf Main, baut bei PRs nur zur Überprüfung
           push: ${{ github.event_name != 'pull_request' }}
