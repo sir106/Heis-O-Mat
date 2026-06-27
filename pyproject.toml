@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "heis-o-mat"
+version = "1.0.0"
+authors = [
+  { name="sir106", email="3455684+sir106@users.noreply.github.com" },
+]
+description = "A downloader for Heise+ magazines."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "requests",
+    "python-dotenv",
+]
+
+[project.scripts]
+heis-o-mat = "heis-o-mat:main"
