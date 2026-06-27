@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY heis-o-mat.py .
 COPY start-downloads.sh .
 
+# Skripte ausführbar machen
+RUN chmod +x start-downloads.sh
+
 # Standard-Umgebungsvariablen
 ENV TZ=Europe/Berlin \
     LANG=C.UTF-8 \
