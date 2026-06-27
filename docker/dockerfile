@@ -1,0 +1,35 @@
+FROM alpine:latest
+
+# System-Abhängigkeiten installieren
+RUN apk add --no-cache \
+    git \
+    curl \
+    bash \
+    coreutils \
+    ca-certificates \
+    python3 \
+    py3-pip \
+    py3-requests \
+    py3-dotenv && \
+    update-ca-certificates
+
+# Arbeitsverzeichnis definieren
+WORKDIR /app
+
+# Repository beim Build klonen
+RUN git clone https://github.com/sir106/Heis-O-Mat . && \
+    chmod +x start-downloads.sh
+
+# Standard-Umgebungsvariablen
+ENV TZ=Europe/Berlin \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    DOWNLOAD_DIR=/downloads \
+    RUN_ON_STARTUP=true \
+    CRON_SCHEDULE="0 10 * * 6"
+
+# Entrypoint-Skript kopieren
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

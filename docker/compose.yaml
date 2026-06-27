@@ -1,0 +1,21 @@
+services:
+  heis-o-mat:
+    build: .
+    container_name: heis-o-mat
+    restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ${SERVER_VOLUME}:/downloads
+    environment:
+      - HEISE_USERNAME=${HEISE_USERNAME}
+      - HEISE_PASSWORD=${HEISE_PASSWORD}
+      - APPRISE_URL=${APPRISE_URL}
+      - RUN_ON_STARTUP=${RUN_ON_STARTUP:-true}
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-"0 10 * * 6"}
+    env_file:
+      - .env
+
+networks:
+  traefik_proxy:
+    external: true
