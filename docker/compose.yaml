@@ -1,21 +1,56 @@
+# Stack Name: heis-o-mat
+# Description: Automate your heise+ archive. Seamlessly fetch and organize c't, iX, and Make magazines for your local digital library. Paid heise+ subscription needed.
+#
 services:
+  # -----------------------------
+  # heis-o-mat
+  # -----------------------------
+  # GitHub: https://github.com/sir106/Heis-O-Mat
+  # DockerHub:
+  # Docs:
+  # Howto:
+  #
   heis-o-mat:
-    build: .
+    image: ghcr.io/sir106/heis-o-mat:latest
     container_name: heis-o-mat
     restart: unless-stopped
+
+
     volumes:
+      # VOLUMES default
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
+
+      # VOLUMES heis-o-mat
       - ${SERVER_VOLUME}:/downloads
+
     environment:
+      # ENVIRONMENT default
+      - TZ=Europe/Berlin
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+
+      # ENVIRONMENT heis-o-mat
       - HEISE_USERNAME=${HEISE_USERNAME}
       - HEISE_PASSWORD=${HEISE_PASSWORD}
+      - REPO_URL=${REPO_URL:-https://github.com/sir106/Heis-O-Mat}
+      - DOWNLOAD_DIR=${DOWNLOAD_DIR:-/downloads}
       - APPRISE_URL=${APPRISE_URL}
       - RUN_ON_STARTUP=${RUN_ON_STARTUP:-true}
       - CRON_SCHEDULE=${CRON_SCHEDULE:-"0 10 * * 6"}
     env_file:
       - .env
 
+# ------------------------------
+# Volumes
+# ------------------------------
+#volumes:
+#  heis-o-mat_data:
+#    driver: local
+
+# ------------------------------
+# Networks
+# ------------------------------
 networks:
   traefik_proxy:
     external: true

@@ -11,8 +11,11 @@ mkdir -p /var/spool/cron/crontabs
 echo "${CRON_SCHEDULE} /app/start-downloads.sh > /proc/1/fd/1 2>&1" > /var/spool/cron/crontabs/root
 echo "[INIT] Cronjob konfiguriert: ${CRON_SCHEDULE}"
 
-# Optionaler Erststart auf Wunsch
-if [ "${RUN_ON_STARTUP}" = "true" ]; then
+# Wert in Kleinbuchstaben umwandeln für flexible Boolean-Prüfung
+STARTUP_VAL=$(echo "${RUN_ON_STARTUP}" | tr '[:upper:]' '[:lower:]')
+
+# Akzeptiert: true, yes, 1
+if [ "$STARTUP_VAL" = "true" ] || [ "$STARTUP_VAL" = "yes" ] || [ "$STARTUP_VAL" = "1" ]; then
     echo "[INIT] Starte initialen Download im Hintergrund..."
     /app/start-downloads.sh &
 else
