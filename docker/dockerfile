@@ -1,24 +1,23 @@
-FROM alpine:latest
+FROM python:3.11-alpine
 
 # System-Abhängigkeiten installieren
 RUN apk add --no-cache \
-    git \
-    curl \
     bash \
-    coreutils \
-    ca-certificates \
-    python3 \
-    py3-pip \
-    py3-requests \
-    py3-dotenv && \
-    update-ca-certificates
+    tzdata
 
 # Arbeitsverzeichnis definieren
 WORKDIR /app
 
-# Repository beim Build klonen
-RUN git clone https://github.com/sir106/Heis-O-Mat . && \
-    chmod +x start-downloads.sh
+# Python-Abhängigkeiten installieren
+# Zuerst die requirements-Datei kopieren und installieren, um den Docker-Layer-Cache zu nutzen
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Den Rest des Anwendungscodes kopieren
+COPY . .
+
+# Skripte ausführbar machen
+RUN chmod +x start-downloads.sh
 
 # Standard-Umgebungsvariablen
 ENV TZ=Europe/Berlin \
@@ -29,7 +28,7 @@ ENV TZ=Europe/Berlin \
     CRON_SCHEDULE="0 10 * * 6"
 
 # Entrypoint-Skript kopieren
-COPY entrypoint.sh /entrypoint.sh
+COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
