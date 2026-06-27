@@ -33,7 +33,6 @@ services:
       # ENVIRONMENT heis-o-mat
       - HEISE_USERNAME=${HEISE_USERNAME}
       - HEISE_PASSWORD=${HEISE_PASSWORD}
-      - REPO_URL=${REPO_URL:-https://github.com/sir106/Heis-O-Mat}
       - DOWNLOAD_DIR=${DOWNLOAD_DIR:-/downloads}
       - APPRISE_URL=${APPRISE_URL}
       - RUN_ON_STARTUP=${RUN_ON_STARTUP:-true}

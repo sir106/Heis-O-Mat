@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import logging
 import os
 import re
@@ -31,6 +32,19 @@ APPRISE_URL = os.environ.get("APPRISE_URL")
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+# Magazine configuration
+MAGAZINE_CONFIG = {
+    "CT": {"name": "c't", "max_issues": 27},
+    "TR": {"name": "MIT Technology Review", "max_issues": 8},
+    "IX": {"name": "iX", "max_issues": 13},
+    "MAKE": {"name": "Make", "max_issues": 7},
+    "CT-FOTO": {"name": "c't Fotografie", "max_issues": 7},
+    "MAC-AND-I": {"name": "Mac & i", "max_issues": 7},
+    # Add other magazines here
+    "DEFAULT": {"name": "heise+ magazine", "max_issues": 27}
+}
+
+
 # Setup logging
 class ColoredFormatter(logging.Formatter):
     COLORS = {
@@ -46,10 +60,8 @@ class ColoredFormatter(logging.Formatter):
         level_name = record.levelname
         color = self.COLORS.get(level_name, self.COLORS['RESET'])
 
-        # Replace levelname with formatted one for specific keywords
-        if level_name == 'WARNING':
-            display_name = 'SKIP'
-        elif level_name == 'DEBUG':
+        # Use INFO for DEBUG level for cleaner output
+        if level_name == 'DEBUG':
             display_name = 'INFO'
         else:
             display_name = level_name
@@ -99,7 +111,7 @@ def send_apprise_notification(title, body, msg_type="info", logger=None):
         if logger:
             logger.debug(f"Failed to send Apprise notification: {e}")
 
-def main():
+def get_login_session(logger, heise_username, heise_password):
     current_year = datetime.now().year
 
     parser = argparse.ArgumentParser(description="Download Heise+ magazines")
@@ -117,14 +129,6 @@ def main():
     # Determine end year: args.end_year or just the start_year
     end_year = args.end_year if args.end_year else args.start_year
 
-    logger = setup_logger(args.verbose)
-
-    heise_username = os.environ.get("HEISE_USERNAME")
-    heise_password = os.environ.get("HEISE_PASSWORD")
-
-    if not heise_username or not heise_password:
-        logger.error("HEISE_USERNAME or HEISE_PASSWORD not found in .env (or Environment)!")
-        sys.exit(1)
 
     # Use a session to persist cookies
     session = requests.Session()
@@ -132,10 +136,6 @@ def main():
 
     masked_user = heise_username[:2] + "*" * (len(heise_username) - 4) + heise_username[-2:] if len(heise_username) > 4 else "***"
 
-    logger.info("----------- Heis-O-Mat Starting Up -----------")
-    logger.info(f"[SETTINGS] (DOWNLOAD_DIR) Target download directory : {DOWNLOAD_DIR}")
-    logger.info(f"[SETTINGS] (APPRISE_URL) Apprise URL                : {APPRISE_URL}")
-    logger.info(f"[SETTINGS] (HEISE_USERNAME) Username for Login      : {masked_user}")
     if args.verbose:
         logger.info(f"Sending login request as User {masked_user} to heise.de...")
 
@@ -155,14 +155,15 @@ def main():
         send_apprise_notification("Heise+ Login Error", msg, "error", logger)
         sys.exit(1)
 
-    # Extract tokens exactly like awk logic: looking for "token":"..."
-    tokens = re.findall(r'"token":"([^"]+)"', login_res.text)
-
-    if not tokens:
+    try:
+        login_json = login_res.json()
+        tokens = login_json.get("token", [])
+    except json.JSONDecodeError:
         msg = "Login failed (Token could not be extracted)."
         logger.error(msg)
         send_apprise_notification("Heise+ Login Error", msg, "error", logger)
         sys.exit(1)
+
 
     token1 = tokens[0]
     token2 = tokens[1] if len(tokens) > 1 else None
@@ -181,56 +182,132 @@ def main():
         logger.error(msg)
         send_apprise_notification("Heise+ Login Error", msg, "error", logger)
         sys.exit(1)
+    return session, args
+
+def download_issue(session, magazine, year, issue, magazine_name, logger, verbose):
+    issue_str = f"{issue:02d}"
+    log_pfx = f"[{magazine}][{year}/{issue_str}]"
+    download_url = f"https://www.heise.de/select/{magazine}/archiv/{year}/{issue}/download"
+    base_dir = Path(DOWNLOAD_DIR) / magazine_name / (magazine_name + " " + str(year))
+    base_path = base_dir / f"{magazine_name}.{year}.{issue_str}.pdf"
+
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    for try_num in range(1, MAX_TRIES + 1):
+        if verbose:
+            logger.info(f"{log_pfx} [Try {try_num}/{MAX_TRIES}] Downloading...\r")
+
+        try:
+            content, final_url = fetch_pdf_content(session, download_url, log_pfx, logger, verbose)
+            size = len(content)
+
+            if size > MIN_PDF_SIZE:
+                logger.info(f"\n{log_pfx} [\033[0;32mSUCCESS\033[0m] Done ({size // 1024 // 1024} MB)\n")
+                base_path.write_bytes(content)
+
+                # Log history
+                history_log = Path(DOWNLOAD_DIR) / "heis-o-mat_download_history.log"
+                with open(history_log, "a") as f:
+                    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+                    f.write(f"{timestamp} - {log_pfx} Successfully downloaded: {base_path} - Source: {final_url}\n")
+
+                send_apprise_notification(
+                    title=f"Heise+ Download Success: {magazine.upper()} {year}/{issue:02d}",
+                    body=f"Successfully downloaded magazine '{magazine.upper()}' issue {issue:02d} from {year}.\nFile size: {size // 1024 // 1024} MB\nSaved to: {base_path}",
+                    msg_type="success",
+                    logger=logger
+                )
+                return "success"
+            else:
+                logger.error(f"\n{log_pfx} Download failed or not a PDF (Size: {size} Bytes)\n")
+
+        except Exception as e:
+            logger.error(f"\n{log_pfx} Request exception: {e}\n")
+
+        if try_num < MAX_TRIES:
+            sleepbar(WAIT_TIME)
+
+    logger.error(f"{log_pfx} [\033[0;31mERROR\033[0m] Download failed after {MAX_TRIES} attempts.\n")
+    send_apprise_notification(
+        title=f"Heise+ Download Error: {magazine.upper()} {year}/{issue:02d}",
+        body=f"Failed to download magazine '{magazine.upper()}' issue {issue:02d} from {year} after {MAX_TRIES} attempts.",
+        msg_type="error",
+        logger=logger
+    )
+    return "fail"
+
+def fetch_pdf_content(session, download_url, log_pfx, logger, verbose):
+    current_url = download_url
+    while True:
+        if verbose:
+            logger.debug(f"\n{log_pfx} Starting download ({current_url})..")
+
+        pdf_res = session.get(current_url, verify=False, stream=True)
+        pdf_res.raise_for_status()
+
+        # Check if the server makes us wait
+        if "wait_sec=" in pdf_res.url:
+            wait_match = re.search(r'wait_sec=(\d+)', pdf_res.url)
+            if wait_match:
+                wait_seconds = int(wait_match.group(1))
+                logger.info(f"{log_pfx} Server requested wait period of {wait_seconds} seconds. ({pdf_res.url})")
+                sleepbar(wait_seconds + 2, prefix="Server-enforced wait (+2s)...")
+                current_url = pdf_res.url # Use the new URL for the next request
+                continue
+            else:
+                # If "wait_sec" is in the URL, but no number was found, break to avoid infinite loop
+                raise IOError("Server responded with 'wait_sec' in URL but no value was found.")
+        else:
+            # No more "wait_sec" in the URL -> We probably reached the actual PDF!
+            return pdf_res.content, pdf_res.url
+
+def main():
+    logger = setup_logger(False) # Initial setup, will be updated by args
+
+    heise_username = os.environ.get("HEISE_USERNAME")
+    heise_password = os.environ.get("HEISE_PASSWORD")
+
+    if not heise_username or not heise_password:
+        logger.error("HEISE_USERNAME or HEISE_PASSWORD not found in .env (or Environment)!")
+        sys.exit(1)
+
+    session, args = get_login_session(logger, heise_username, heise_password)
+    logger = setup_logger(args.verbose) # Re-setup logger with correct verbosity
+
+    masked_user = heise_username[:2] + "*" * (len(heise_username) - 4) + heise_username[-2:] if len(heise_username) > 4 else "***"
+    logger.info("----------- Heis-O-Mat Starting Up -----------")
+    logger.info(f"[SETTINGS] (DOWNLOAD_DIR) Target download directory : {DOWNLOAD_DIR}")
+    logger.info(f"[SETTINGS] (APPRISE_URL) Apprise URL                : {APPRISE_URL is not None}")
+    logger.info(f"[SETTINGS] (HEISE_USERNAME) Username for Login      : {masked_user}")
 
     count_success = 0
     count_fail = 0
     count_skip = 0
 
-    match args.magazine.upper():
-        case "CT":
-            MAX_ISSUES=27
-            MAGAZIN_NAME="c't"
-        case "TR":
-            MAX_ISSUES=8
-            MAGAZIN_NAME="MIT Technology Review"
-        case "IX":
-            MAX_ISSUES=13
-            MAGAZIN_NAME="iX"
-        case "MAKE":
-            MAGAZIN_NAME="Make"
-            MAX_ISSUES=7
-        case "CT-FOTO":
-            MAGAZIN_NAME="c't Fotografie"
-            MAX_ISSUES=7
-        case "MAC-AND-I":
-            MAGAZIN_NAME="Mac & i"
-            MAX_ISSUES=7
-        case _:
-            MAGAZIN_NAME="heise+ magazine"
-            MAX_ISSUES=27
+    magazine_key = args.magazine.upper()
+    config = MAGAZINE_CONFIG.get(magazine_key, MAGAZINE_CONFIG["DEFAULT"])
+    MAGAZINE_NAME = config["name"]
+    MAX_ISSUES = config["max_issues"]
 
-    logger.debug(f"Setting MAX_ISSUES to {MAX_ISSUES} for {args.magazine.upper()}..")
+    logger.debug(f"Setting MAX_ISSUES to {MAX_ISSUES} for {magazine_key}..")
 
-
+    end_year = args.end_year if args.end_year else args.start_year
     for year in range(args.start_year, end_year + 1):
         if args.verbose:
             logger.debug(f"Processing Year {year}")
 
-        missing_consecutive = 0  # Reset counter for each year
+        missing_consecutive = 0
 
         for i in range(1, MAX_ISSUES + 1):
             issue_str = f"{i:02d}"
-            base_dir = Path(DOWNLOAD_DIR) / MAGAZIN_NAME / (MAGAZIN_NAME + " " + str(year))
-            base_path = base_dir / f"{MAGAZIN_NAME}.{year}.{issue_str}.pdf"
-
+            base_dir = Path(DOWNLOAD_DIR) / MAGAZINE_NAME / (MAGAZINE_NAME + " " + str(year))
+            base_path = base_dir / f"{MAGAZINE_NAME}.{year}.{issue_str}.pdf"
             log_pfx = f"[{args.magazine}][{year}/{issue_str}]"
 
             if base_path.exists():
                 count_skip += 1
-                logger.warning(f"{log_pfx} Already exists ({base_path}).") # mapped to SKIP
+                logger.info(f"[SKIP] {log_pfx} Already exists ({base_path}).")
                 continue
-
-            base_dir.mkdir(parents=True, exist_ok=True)
 
             thumb_url = f"https://heise.cloudimg.io/v7/_www-heise-de_/select/thumbnail/{args.magazine}/{year}/{i}.jpg"
             thumb_res = session.get(thumb_url, verify=False)
@@ -242,47 +319,23 @@ def main():
                 if missing_consecutive >= 3:
                     if args.verbose:
                         logger.info(f"Stopping year {year}: 3 consecutive issues missing.")
-                    break # Exit the issue loop (i) and move to next year
+                    break
                 continue
 
-            # If we found an issue, reset the counter
             missing_consecutive = 0
-
             if args.verbose:
                 logger.debug(f"{log_pfx} Issue found. Starting download sequence.")
 
-            success = False
-            for try_num in range(1, MAX_TRIES + 1):
-                if args.verbose:
-                    logger.info(f"{log_pfx} [Try {try_num}/{MAX_TRIES}] Downloading...\r")
-                download_url = f"https://www.heise.de/select/{args.magazine}/archiv/{year}/{i}/download"
+            result = download_issue(session, args.magazine, year, i, MAGAZINE_NAME, logger, args.verbose)
+            if result == "success":
+                count_success += 1
+            else:
+                count_fail += 1
 
-                try:
-                    while True:
-                        if args.verbose:
-                            logger.debug(f"\n{log_pfx} Starting download ({download_url}) to {base_path}..")
+    logger.info(f"----------- Heis-O-Mat has finished! {count_success} ok, {count_fail} failed, {count_skip} skipped. -----------")
 
-                        pdf_res = session.get(download_url, verify=False, stream=True)
-
-                        # Check if the server makes us wait
-                        if "wait_sec=" in pdf_res.url:
-                            wait_match = re.search(r'wait_sec=(\d+)', pdf_res.url)
-                            if wait_match:
-                                wait_seconds = int(wait_match.group(1))
-                                logger.info(f"{log_pfx} Server requested wait period of {wait_seconds} seconds. ({pdf_res.url})")
-
-                                sleepbar(wait_seconds + 2, prefix="Server-enforced wait (+2s)...")
-                                continue  # Jumps to the next iteration of 'while True'
-                            else:
-                                # If "wait_sec" is in the URL, but no number was found
-                                break
-                        else:
-                            # No more "wait_sec" in the URL -> We probably reached the actual PDF!
-                            content = pdf_res.content
-                            size = len(content)
-                            break
-
-                    if size > MIN_PDF_SIZE:
+if __name__ == "__main__":
+    main()
                         logger.info(f"\n{log_pfx} [\033[0;32mSUCCESS\033[0m] Done ({size // 1024 // 1024} MB)\n")
                         base_path.write_bytes(content)
 
