@@ -14,10 +14,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Den Rest des Anwendungscodes kopieren
-COPY . .
-
-# Skripte ausführbar machen
-RUN chmod +x start-downloads.sh
+COPY heis-o-mat.py .
+COPY start-downloads.sh .
 
 # Standard-Umgebungsvariablen
 ENV TZ=Europe/Berlin \
