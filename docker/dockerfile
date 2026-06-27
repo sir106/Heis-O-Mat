@@ -20,6 +20,9 @@ COPY start-downloads.sh .
 # Skripte ausführbar machen
 RUN chmod +x start-downloads.sh
 
+# Download-Verzeichnis erstellen
+RUN mkdir -p /downloads
+
 # Standard-Umgebungsvariablen
 ENV TZ=Europe/Berlin \
     LANG=C.UTF-8 \

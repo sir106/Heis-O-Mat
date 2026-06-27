@@ -78,6 +78,10 @@ def setup_logger(verbose):
     logger = logging.getLogger('Heis-O-Mat')
     logger.setLevel(logging.DEBUG if verbose else logging.INFO)
 
+    # Vorhandene Handler entfernen, um doppelte Logs zu vermeiden
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
     ch = logging.StreamHandler()
     ch.setLevel(logging.DEBUG if verbose else logging.INFO)
 
@@ -155,15 +159,14 @@ def get_login_session(logger, heise_username, heise_password):
         send_apprise_notification("Heise+ Login Error", msg, "error", logger)
         sys.exit(1)
 
-    try:
-        login_json = login_res.json()
-        tokens = login_json.get("token", [])
-    except json.JSONDecodeError:
+    # Extract tokens exactly like awk logic: looking for "token":"..."
+    tokens = re.findall(r'"token":"([^"]+)"', login_res.text)
+
+    if not tokens:
         msg = "Login failed (Token could not be extracted)."
         logger.error(msg)
         send_apprise_notification("Heise+ Login Error", msg, "error", logger)
         sys.exit(1)
-
 
     token1 = tokens[0]
     token2 = tokens[1] if len(tokens) > 1 else None
@@ -252,7 +255,6 @@ def fetch_pdf_content(session, download_url, log_pfx, logger, verbose):
                 wait_seconds = int(wait_match.group(1))
                 logger.info(f"{log_pfx} Server requested wait period of {wait_seconds} seconds. ({pdf_res.url})")
                 sleepbar(wait_seconds + 2, prefix="Server-enforced wait (+2s)...")
-                current_url = pdf_res.url # Use the new URL for the next request
                 continue
             else:
                 # If "wait_sec" is in the URL, but no number was found, break to avoid infinite loop
@@ -335,4 +337,9 @@ def main():
     logger.info(f"----------- Heis-O-Mat has finished! {count_success} ok, {count_fail} failed, {count_skip} skipped. -----------")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        # Handle Ctrl+C gracefully
+        print("\n[INFO] Cancellation requested by user. Shutting down.")
+        sys.exit(130) # Standard exit code for command-line tools on Ctrl+C
