@@ -30,11 +30,12 @@ Instead of editing the script directly, credentials are now securely managed via
    HEISE_PASSWORD=your_password
    ```
 
-You can optionally configure the target download directory and Apprise notifications:
+You can optionally configure the target download directory, Apprise notifications, and Healthchecks.io:
 ```env
 # Optional settings
-DOWNLOAD_DIR=./downloads   # Defaults to /downloads if not set
-APPRISE_URL=apprise://...  # Optional notification URL
+DOWNLOAD_DIR=./downloads                 # Defaults to /downloads if not set
+APPRISE_URL=apprise://...                # Optional notification URL
+HEALTHCHECK_URL=https://hc-ping.com/...  # Optional Healthchecks.io ping URL
 ```
 
 ## Usage

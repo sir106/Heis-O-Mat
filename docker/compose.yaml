@@ -35,6 +35,7 @@ services:
       - HEISE_PASSWORD=${HEISE_PASSWORD}
       - DOWNLOAD_DIR=${DOWNLOAD_DIR:-/downloads}
       - APPRISE_URL=${APPRISE_URL}
+      - HEALTHCHECK_URL=${HEALTHCHECK_URL}
       - RUN_ON_STARTUP=${RUN_ON_STARTUP:-true}
       - CRON_SCHEDULE=${CRON_SCHEDULE:-"0 10 * * 6"}
     env_file:

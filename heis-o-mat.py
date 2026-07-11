@@ -8,6 +8,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+import traceback
 
 import requests
 import urllib3
@@ -29,6 +30,7 @@ WAIT_TIME = 80
 MAX_TRIES = 3
 DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", "/downloads")
 APPRISE_URL = os.environ.get("APPRISE_URL")
+HEALTHCHECK_URL = os.environ.get("HEALTHCHECK_URL") or os.environ.get("HEALTHCHECKS_URL") or os.environ.get("HEALTHCHECKS_IO_URL")
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
@@ -114,6 +116,23 @@ def send_apprise_notification(title, body, msg_type="info", logger=None):
     except Exception as e:
         if logger:
             logger.debug(f"Failed to send Apprise notification: {e}")
+
+def ping_healthcheck(status, body=None, logger=None):
+    if not HEALTHCHECK_URL:
+        return
+
+    url = HEALTHCHECK_URL
+    if status == "start":
+        url = url.rstrip('/') + "/start"
+    elif status == "fail":
+        url = url.rstrip('/') + "/fail"
+
+    try:
+        res = requests.post(url, data=body, timeout=10, verify=False)
+        res.raise_for_status()
+    except Exception as e:
+        if logger:
+            logger.debug(f"Failed to send Healthchecks.io ping ({status}): {e}")
 
 def get_login_session(logger, heise_username, heise_password):
     current_year = datetime.now().year
@@ -265,6 +284,7 @@ def fetch_pdf_content(session, download_url, log_pfx, logger, verbose):
 
 def main():
     logger = setup_logger(False) # Initial setup, will be updated by args
+    ping_healthcheck("start", logger=logger)
 
     heise_username = os.environ.get("HEISE_USERNAME")
     heise_password = os.environ.get("HEISE_PASSWORD")
@@ -280,6 +300,7 @@ def main():
     logger.info("----------- Heis-O-Mat Starting Up -----------")
     logger.info(f"[SETTINGS] (DOWNLOAD_DIR) Target download directory : {DOWNLOAD_DIR}")
     logger.info(f"[SETTINGS] (APPRISE_URL) Apprise URL                : {APPRISE_URL is not None}")
+    logger.info(f"[SETTINGS] (HEALTHCHECK_URL) Healthchecks.io URL      : {HEALTHCHECK_URL is not None}")
     logger.info(f"[SETTINGS] (HEISE_USERNAME) Username for Login      : {masked_user}")
 
     count_success = 0
@@ -334,7 +355,13 @@ def main():
             else:
                 count_fail += 1
 
-    logger.info(f"----------- Heis-O-Mat has finished! {count_success} ok, {count_fail} failed, {count_skip} skipped. -----------")
+    summary_message = f"Heis-O-Mat has finished! {count_success} ok, {count_fail} failed, {count_skip} skipped."
+    logger.info(f"----------- {summary_message} -----------")
+
+    if count_fail > 0:
+        ping_healthcheck("fail", body=summary_message, logger=logger)
+    else:
+        ping_healthcheck("success", body=summary_message, logger=logger)
 
 if __name__ == "__main__":
     try:
@@ -342,4 +369,15 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully
         print("\n[INFO] Cancellation requested by user. Shutting down.")
+        ping_healthcheck("fail", body="Process cancelled by user (KeyboardInterrupt).")
         sys.exit(130) # Standard exit code for command-line tools on Ctrl+C
+    except SystemExit as e:
+        if e.code != 0:
+            ping_healthcheck("fail", body=f"Process exited with code {e.code}")
+        sys.exit(e.code)
+    except Exception as e:
+        tb_str = traceback.format_exc()
+        # Log to stderr
+        print(f"\n[ERROR] An unexpected error occurred: {e}", file=sys.stderr)
+        ping_healthcheck("fail", body=f"Process crashed with exception:\n{tb_str}")
+        sys.exit(1)
