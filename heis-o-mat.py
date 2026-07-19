@@ -244,7 +244,7 @@ def download_issue(session, magazine, year, issue, magazine_name, logger, verbos
                 logger.error(f"\n{log_pfx} Download failed or not a PDF (Size: {size} Bytes)\n")
 
         except Exception as e:
-            logger.error(f"\n{log_pfx} Request exception: {e}\n")
+            logger.warn(f"\n{log_pfx} Request exception: {e}\n")
 
         if try_num < MAX_TRIES:
             sleepbar(WAIT_TIME)
