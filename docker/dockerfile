@@ -1,37 +1,38 @@
 FROM python:3.11-alpine
 
-# System-Abhängigkeiten installieren
+# Install system dependencies & up-to-date certificates
 RUN apk add --no-cache \
     bash \
-    tzdata
+    tzdata \
+    ca-certificates
 
-# Arbeitsverzeichnis definieren
+# Set working directory
 WORKDIR /app
 
-# Python-Abhängigkeiten installieren
-# Zuerst die requirements-Datei kopieren und installieren, um den Docker-Layer-Cache zu nutzen
+# Install Python dependencies with layer caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Den Rest des Anwendungscodes kopieren
+# Copy application files
 COPY heis-o-mat.py .
 COPY start-downloads.sh .
 
-# Skripte ausführbar machen
+# Make scripts executable
 RUN chmod +x start-downloads.sh
 
-# Download-Verzeichnis erstellen
+# Create download directory
 RUN mkdir -p /downloads
 
-# Standard-Umgebungsvariablen
-ENV TZ=Europe/Berlin \
+# Standard environment variables
+ENV PYTHONUNBUFFERED=1 \
+    TZ=Europe/Berlin \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     DOWNLOAD_DIR=/downloads \
     RUN_ON_STARTUP=true \
     CRON_SCHEDULE="0 10 * * 6"
 
-# Entrypoint-Skript kopieren
+# Copy entrypoint script
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
