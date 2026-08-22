@@ -118,10 +118,13 @@ def send_apprise_notification(title, body, msg_type="info", logger=None, verify_
     if not APPRISE_URL:
         return
 
+    # Map "error" to "failure" because Apprise API expects "failure" for errors.
+    apprise_type = "failure" if msg_type == "error" else msg_type
+
     payload = {
         "title": title,
         "body": body,
-        "type": msg_type,
+        "type": apprise_type,
         "format": "text"
     }
 
@@ -213,9 +216,11 @@ def get_login_session(logger, heise_username, heise_password, verbose=False, ver
 
     # Extract tokens: check JSON payload first, fallback to regex
     tokens = []
+    login_data_json = {}
     try:
         data = login_res.json()
         if isinstance(data, dict):
+            login_data_json = data
             if "token" in data and isinstance(data["token"], str):
                 tokens.append(data["token"])
             if "tokens" in data and isinstance(data["tokens"], list):
@@ -244,24 +249,42 @@ def get_login_session(logger, heise_username, heise_password, verbose=False, ver
         logger.info("Login successful. Extracted tokens, performing SSO remote logins...")
 
     try:
-        res1 = session.post(
-            "https://m.heise.de/sso/login/remote-login",
-            data={"token": token1},
-            verify=verify_ssl,
-            timeout=DEFAULT_TIMEOUT
-        )
-        res1.raise_for_status()
-
-        if token2 and token2 != token1:
+        remote_login_urls = login_data_json.get("remote_login_urls", [])
+        if remote_login_urls:
+            for item in remote_login_urls:
+                url = item.get("url")
+                payload = item.get("data")
+                if url and payload:
+                    if verbose:
+                        logger.info(f"Performing SSO remote login to {url}...")
+                    res = session.post(
+                        url,
+                        data=payload,
+                        verify=verify_ssl,
+                        timeout=DEFAULT_TIMEOUT
+                    )
+                    res.raise_for_status()
+        else:
             if verbose:
-                logger.info("Performing secondary SSO shop login...")
-            res2 = session.post(
-                "https://shop.heise.de/customer/account/loginRemote",
-                data={"token": token2},
+                logger.info("No remote login URLs found in JSON response, using fallback...")
+            res1 = session.post(
+                "https://www.heise.de/sso/login/remote-login",
+                data={"token": token1},
                 verify=verify_ssl,
                 timeout=DEFAULT_TIMEOUT
             )
-            res2.raise_for_status()
+            res1.raise_for_status()
+
+            if token2 and token2 != token1:
+                if verbose:
+                    logger.info("Performing secondary SSO shop login...")
+                res2 = session.post(
+                    "https://shop.heise.de/customer/account/loginRemote",
+                    data={"token": token2},
+                    verify=verify_ssl,
+                    timeout=DEFAULT_TIMEOUT
+                )
+                res2.raise_for_status()
     except Exception as e:
         msg = f"SSO remote login failed: {e}"
         logger.error(msg)
