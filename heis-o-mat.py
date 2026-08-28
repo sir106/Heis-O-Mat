@@ -11,6 +11,7 @@ from pathlib import Path
 import traceback
 
 import requests
+import urllib.parse
 import urllib3
 
 # Try to import dotenv, but don't fail if not present (can rely on env vars)
@@ -38,6 +39,7 @@ else:
     DOWNLOAD_DIR = "./downloads"
 
 APPRISE_URL = os.environ.get("APPRISE_URL")
+BASE_URL = os.environ.get("BASE_URL")
 HEALTHCHECK_URL = os.environ.get("HEALTHCHECK_URL") or os.environ.get("HEALTHCHECKS_URL") or os.environ.get("HEALTHCHECKS_IO_URL")
 DEFAULT_VERIFY_SSL = os.environ.get("VERIFY_SSL", "true").lower() not in ("false", "0", "no")
 
@@ -170,6 +172,8 @@ def parse_arguments():
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('--download-dir', type=str, default=None,
                         help=f'Target download directory (default: {DOWNLOAD_DIR})')
+    parser.add_argument('--base-url', type=str, default=BASE_URL,
+                        help='Base URL where downloaded files are served (default: from BASE_URL env var)')
     parser.add_argument('--insecure', action='store_true',
                         help='Disable SSL certificate verification (not recommended)')
 
@@ -329,7 +333,7 @@ def fetch_pdf_content(session, download_url, log_pfx, logger, verbose, verify_ss
     raise IOError(f"Exceeded maximum server wait cycles ({MAX_WAIT_CYCLES}).")
 
 
-def download_issue(session, magazine, year, issue, magazine_name, target_dir, logger, verbose, verify_ssl=True):
+def download_issue(session, magazine, year, issue, magazine_name, target_dir, logger, verbose, verify_ssl=True, base_url=None):
     issue_str = f"{issue:02d}"
     log_pfx = f"[{magazine}][{year}/{issue_str}]"
     download_url = f"https://www.heise.de/select/{magazine}/archiv/{year}/{issue}/download"
@@ -350,19 +354,35 @@ def download_issue(session, magazine, year, issue, magazine_name, target_dir, lo
                 logger.info(f"{log_pfx} [\033[0;32mSUCCESS\033[0m] Done ({size // 1024 // 1024} MB)")
                 base_path.write_bytes(content)
 
+                # Construct accessible file URL if base_url is configured
+                file_url = None
+                if base_url:
+                    rel_path = base_path.relative_to(Path(target_dir))
+                    quoted_rel_path = urllib.parse.quote(rel_path.as_posix(), safe="/")
+                    file_url = f"{base_url.rstrip('/')}/{quoted_rel_path.lstrip('/')}"
+
                 # Log history
                 history_log = Path(target_dir) / "heis-o-mat_download_history.log"
                 try:
                     with open(history_log, "a", encoding="utf-8") as f:
                         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-                        f.write(f"{timestamp} - {log_pfx} Successfully downloaded: {base_path} - Source: {final_url}\n")
+                        url_log = f" - Access URL: {file_url}" if file_url else ""
+                        f.write(f"{timestamp} - {log_pfx} Successfully downloaded: {base_path} - Source: {final_url}{url_log}\n")
                 except Exception as log_err:
                     if verbose:
                         logger.warning(f"Could not write to history log: {log_err}")
 
+                body = (
+                    f"Successfully downloaded magazine '{magazine.upper()}' issue {issue:02d} from {year}.\n"
+                    f"File size: {size // 1024 // 1024} MB\n"
+                    f"Saved to: {base_path}"
+                )
+                if file_url:
+                    body += f"\nFile URL: {file_url}"
+
                 send_apprise_notification(
                     title=f"Heise+ Download Success: {magazine.upper()} {year}/{issue:02d}",
-                    body=f"Successfully downloaded magazine '{magazine.upper()}' issue {issue:02d} from {year}.\nFile size: {size // 1024 // 1024} MB\nSaved to: {base_path}",
+                    body=body,
                     msg_type="success",
                     logger=logger,
                     verify_ssl=verify_ssl
@@ -414,9 +434,11 @@ def main():
     ping_healthcheck("start", logger=logger, verify_ssl=verify_ssl)
 
     masked_user = mask_username(heise_username)
+    base_url = args.base_url
     logger.info("----------- Heis-O-Mat Starting Up -----------")
     logger.info(f"[SETTINGS] (DOWNLOAD_DIR) Target download directory : {target_download_dir}")
     logger.info(f"[SETTINGS] (APPRISE_URL) Apprise notifications      : {'Enabled' if APPRISE_URL else 'Disabled'}")
+    logger.info(f"[SETTINGS] (BASE_URL) Base URL for file access      : {base_url if base_url else 'Disabled'}")
     logger.info(f"[SETTINGS] (HEALTHCHECK_URL) Healthchecks.io ping   : {'Enabled' if HEALTHCHECK_URL else 'Disabled'}")
     logger.info(f"[SETTINGS] (SSL_VERIFICATION) Certificate validation: {'Enabled' if verify_ssl else 'Disabled (Insecure)'}")
     logger.info(f"[SETTINGS] (HEISE_USERNAME) Username for Login      : {masked_user}")
@@ -490,7 +512,8 @@ def main():
                 target_dir=target_download_dir,
                 logger=logger,
                 verbose=args.verbose,
-                verify_ssl=verify_ssl
+                verify_ssl=verify_ssl,
+                base_url=base_url
             )
             if result == "success":
                 count_success += 1
