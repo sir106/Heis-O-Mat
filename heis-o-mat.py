@@ -127,7 +127,7 @@ def send_apprise_notification(title, body, msg_type="info", logger=None, verify_
         "title": title,
         "body": body,
         "type": apprise_type,
-        "format": "text"
+        "format": "markdown"
     }
 
     try:
@@ -373,12 +373,12 @@ def download_issue(session, magazine, year, issue, magazine_name, target_dir, lo
                         logger.warning(f"Could not write to history log: {log_err}")
 
                 body = (
-                    f"Successfully downloaded magazine '{magazine.upper()}' issue {issue:02d} from {year}.\n"
-                    f"File size: {size // 1024 // 1024} MB\n"
-                    f"Saved to: {base_path}"
+                    f"Successfully downloaded magazine **{magazine.upper()}** issue **{issue:02d}** from **{year}**.\n\n"
+                    f"- **File size:** {size // 1024 // 1024} MB\n"
+                    f"- **Saved to:** `{base_path}`"
                 )
                 if file_url:
-                    body += f"\nFile URL: {file_url}"
+                    body += f"\n- **Download Link:** [{base_path.name}]({file_url})\n- **URL:** {file_url}"
 
                 send_apprise_notification(
                     title=f"Heise+ Download Success: {magazine.upper()} {year}/{issue:02d}",
