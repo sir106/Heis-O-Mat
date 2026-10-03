@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import json
 import logging
 import os
 import re
@@ -23,7 +22,7 @@ except ImportError:
     pass
 
 # Configuration constants
-MIN_PDF_SIZE = 5000000  # 5MB
+MIN_PDF_SIZE = 50000  # 50KB minimum threshold to filter out tiny error responses
 WAIT_TIME = 80
 MAX_TRIES = 3
 MAX_WAIT_CYCLES = 10
@@ -76,12 +75,19 @@ class ColoredFormatter(logging.Formatter):
         # Use INFO for DEBUG level for cleaner output
         display_name = 'INFO' if level_name == 'DEBUG' else level_name
 
+        orig_levelname = record.levelname
         if hasattr(record, 'no_prefix') and record.no_prefix:
             record.levelname = ""
-            return record.getMessage()
+            try:
+                return super().format(record)
+            finally:
+                record.levelname = orig_levelname
 
         record.levelname = f"[{color}{display_name}{self.COLORS['RESET']}]"
-        return super().format(record)
+        try:
+            return super().format(record)
+        finally:
+            record.levelname = orig_levelname
 
 
 def setup_logger(verbose):
@@ -138,9 +144,12 @@ def send_apprise_notification(title, body, msg_type="info", logger=None, verify_
             logger.debug(f"Failed to send Apprise notification: {e}")
 
 
-def ping_healthcheck(status, body=None, logger=None, verify_ssl=True):
+def ping_healthcheck(status, body=None, logger=None, verify_ssl=None):
     if not HEALTHCHECK_URL:
         return
+
+    if verify_ssl is None:
+        verify_ssl = DEFAULT_VERIFY_SSL
 
     url = HEALTHCHECK_URL.rstrip('/')
     if status == "start":
@@ -299,14 +308,13 @@ def get_login_session(logger, heise_username, heise_password, verbose=False, ver
 
 
 def fetch_pdf_content(session, download_url, log_pfx, logger, verbose, verify_ssl=True):
-    current_url = download_url
     wait_cycles = 0
 
     while wait_cycles < MAX_WAIT_CYCLES:
         if verbose:
-            logger.debug(f"{log_pfx} Requesting ({current_url})...")
+            logger.debug(f"{log_pfx} Requesting ({download_url})...")
 
-        pdf_res = session.get(current_url, verify=verify_ssl, stream=True, timeout=DEFAULT_TIMEOUT)
+        pdf_res = session.get(download_url, verify=verify_ssl, stream=True, timeout=DEFAULT_TIMEOUT)
         pdf_res.raise_for_status()
 
         # Check if the server makes us wait
@@ -324,6 +332,10 @@ def fetch_pdf_content(session, download_url, log_pfx, logger, verbose, verify_ss
                 raise IOError("Server responded with 'wait_sec' in URL but no numeric value was found.")
         else:
             try:
+                # Check if redirected to login or unauthorized page
+                if "/login" in pdf_res.url:
+                    raise PermissionError(f"Redirected to login page ({pdf_res.url}) - session may be invalid or expired.")
+
                 content = pdf_res.content
                 final_url = pdf_res.url
                 return content, final_url
@@ -339,6 +351,7 @@ def download_issue(session, magazine, year, issue, magazine_name, target_dir, lo
     download_url = f"https://www.heise.de/select/{magazine}/archiv/{year}/{issue}/download"
     base_dir = Path(target_dir) / magazine_name / f"{magazine_name} {year}"
     base_path = base_dir / f"{magazine_name}.{year}.{issue_str}.pdf"
+    tmp_path = base_dir / f".{magazine_name}.{year}.{issue_str}.pdf.tmp"
 
     base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -346,13 +359,17 @@ def download_issue(session, magazine, year, issue, magazine_name, target_dir, lo
         if verbose:
             logger.info(f"{log_pfx} [Try {try_num}/{MAX_TRIES}] Downloading...")
 
+        non_retryable_error = False
         try:
             content, final_url = fetch_pdf_content(session, download_url, log_pfx, logger, verbose, verify_ssl=verify_ssl)
             size = len(content)
 
-            if size > MIN_PDF_SIZE:
-                logger.info(f"{log_pfx} [\033[0;32mSUCCESS\033[0m] Done ({size // 1024 // 1024} MB)")
-                base_path.write_bytes(content)
+            is_pdf = content.startswith(b"%PDF-")
+            if is_pdf and size >= MIN_PDF_SIZE:
+                logger.info(f"{log_pfx} Done ({size // 1024 // 1024} MB)")
+                # Atomic write: write to temp file then rename
+                tmp_path.write_bytes(content)
+                tmp_path.replace(base_path)
 
                 # Construct accessible file URL if base_url is configured
                 file_url = None
@@ -388,19 +405,43 @@ def download_issue(session, magazine, year, issue, magazine_name, target_dir, lo
                     verify_ssl=verify_ssl
                 )
                 return "success"
+            elif not is_pdf:
+                logger.error(f"{log_pfx} Downloaded content is not a valid PDF (Size: {size} Bytes, starts with {content[:15]!r})")
+                if content.startswith(b"<!DOCTYPE") or content.startswith(b"<html") or content.startswith(b"{\n"):
+                    non_retryable_error = True
             else:
-                logger.error(f"{log_pfx} Download failed or not a valid PDF (Size: {size} Bytes)")
+                logger.error(f"{log_pfx} Download failed: file size ({size} Bytes) below minimum threshold ({MIN_PDF_SIZE} Bytes)")
 
+        except requests.HTTPError as http_err:
+            status_code = http_err.response.status_code if http_err.response is not None else None
+            logger.warning(f"{log_pfx} HTTP error during attempt {try_num}: {http_err}")
+            # Client errors (401, 403, 404) will not succeed on retry
+            if status_code in (401, 403, 404):
+                non_retryable_error = True
+        except PermissionError as perm_err:
+            logger.error(f"{log_pfx} Authentication error: {perm_err}")
+            non_retryable_error = True
         except Exception as e:
             logger.warning(f"{log_pfx} Request exception during attempt {try_num}: {e}")
+
+        # Clean up temporary file if it was left behind
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+
+        if non_retryable_error:
+            logger.error(f"{log_pfx} Non-retryable error encountered. Aborting download for this issue.")
+            break
 
         if try_num < MAX_TRIES:
             sleepbar(WAIT_TIME, prefix="Retry delay", logger=logger)
 
-    logger.error(f"{log_pfx} [\033[0;31mERROR\033[0m] Download failed after {MAX_TRIES} attempts.")
+    logger.error(f"{log_pfx} Download failed after attempt(s).")
     send_apprise_notification(
         title=f"Heise+ Download Error: {magazine.upper()} {year}/{issue:02d}",
-        body=f"Failed to download magazine '{magazine.upper()}' issue {issue:02d} from {year} after {MAX_TRIES} attempts.",
+        body=f"Failed to download magazine '{magazine.upper()}' issue {issue:02d} from {year}.",
         msg_type="error",
         logger=logger,
         verify_ssl=verify_ssl
@@ -455,10 +496,17 @@ def main():
     count_fail = 0
     count_skip = 0
 
+    magazine_slug = args.magazine.lower()
     magazine_key = args.magazine.upper()
-    config = MAGAZINE_CONFIG.get(magazine_key, MAGAZINE_CONFIG["DEFAULT"])
-    magazine_name = config["name"]
-    max_issues = config["max_issues"]
+
+    if magazine_key in MAGAZINE_CONFIG:
+        config = MAGAZINE_CONFIG[magazine_key]
+        magazine_name = config["name"]
+        max_issues = config["max_issues"]
+    else:
+        # Default magazine name to user argument rather than static "heise+ magazine"
+        magazine_name = args.magazine
+        max_issues = MAGAZINE_CONFIG["DEFAULT"]["max_issues"]
 
     if args.verbose:
         logger.debug(f"Configured max issues: {max_issues} for magazine '{magazine_key}' ({magazine_name})")
@@ -473,14 +521,20 @@ def main():
             issue_str = f"{i:02d}"
             base_dir = Path(target_download_dir) / magazine_name / f"{magazine_name} {year}"
             base_path = base_dir / f"{magazine_name}.{year}.{issue_str}.pdf"
-            log_pfx = f"[{args.magazine}][{year}/{issue_str}]"
+            log_pfx = f"[{magazine_slug}][{year}/{issue_str}]"
 
             if base_path.exists():
-                count_skip += 1
-                logger.info(f"[SKIP] {log_pfx} Already exists ({base_path}).")
-                continue
+                try:
+                    if base_path.stat().st_size >= MIN_PDF_SIZE:
+                        count_skip += 1
+                        logger.info(f"[SKIP] {log_pfx} Already exists ({base_path}).")
+                        continue
+                    else:
+                        logger.warning(f"{log_pfx} Existing file is truncated or empty ({base_path.stat().st_size} bytes). Re-downloading...")
+                except OSError:
+                    pass
 
-            thumb_url = f"https://heise.cloudimg.io/v7/_www-heise-de_/select/thumbnail/{args.magazine}/{year}/{i}.jpg"
+            thumb_url = f"https://heise.cloudimg.io/v7/_www-heise-de_/select/thumbnail/{magazine_slug}/{year}/{i}.jpg"
             try:
                 thumb_res = session.get(thumb_url, verify=verify_ssl, timeout=DEFAULT_TIMEOUT)
                 thumb_status = thumb_res.status_code
@@ -488,6 +542,19 @@ def main():
                 if args.verbose:
                     logger.warning(f"{log_pfx} Error fetching thumbnail: {e}")
                 thumb_status = None
+
+            # Fallback check on archive page for older years or magazines without cloudimg thumbnails
+            if thumb_status != 200:
+                archive_url = f"https://www.heise.de/select/{magazine_slug}/archiv/{year}/{i}"
+                try:
+                    arch_res = session.get(archive_url, verify=verify_ssl, timeout=DEFAULT_TIMEOUT)
+                    if arch_res.status_code == 200 and "select" in arch_res.url:
+                        thumb_status = 200
+                        if args.verbose:
+                            logger.debug(f"{log_pfx} Issue verified via archive page ({archive_url}).")
+                except Exception as e:
+                    if args.verbose:
+                        logger.warning(f"{log_pfx} Error checking archive page: {e}")
 
             if thumb_status != 200:
                 missing_consecutive += 1
@@ -505,7 +572,7 @@ def main():
 
             result = download_issue(
                 session=session,
-                magazine=args.magazine,
+                magazine=magazine_slug,
                 year=year,
                 issue=i,
                 magazine_name=magazine_name,
@@ -525,6 +592,7 @@ def main():
 
     if count_fail > 0:
         ping_healthcheck("fail", body=summary_message, logger=logger, verify_ssl=verify_ssl)
+        sys.exit(1)
     else:
         ping_healthcheck("success", body=summary_message, logger=logger, verify_ssl=verify_ssl)
 

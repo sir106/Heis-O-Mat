@@ -34,7 +34,7 @@ You can optionally configure the target download directory, Apprise notification
 ```env
 # Optional settings
 DOWNLOAD_DIR=./downloads                 # Defaults to /downloads if not set
-APPRISE_URL=apprise://...                # Optional notification URL
+APPRISE_URL=https://apprise.example.com/notify/... # Optional Apprise API notification URL (HTTP/HTTPS)
 HEALTHCHECK_URL=https://hc-ping.com/...  # Optional Healthchecks.io ping URL
 BASE_URL=https://files.example.com/      # Optional base URL for accessing downloaded files in notifications
 ```
