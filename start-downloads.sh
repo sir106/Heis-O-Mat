@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Prevent overlapping executions
+LOCKDIR="/tmp/heis-o-mat.lock"
+if ! mkdir "$LOCKDIR" 2>/dev/null; then
+    echo "[SKIP] Another instance of start-downloads.sh is already running."
+    exit 0
+fi
+trap 'rm -rf "$LOCKDIR"' EXIT INT TERM
+
 # Get the directory where the script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 
