@@ -318,7 +318,7 @@ def fetch_pdf_content(session, download_url, log_pfx, logger, verbose, verify_ss
                 wait_cycles += 1
                 wait_seconds = int(wait_match.group(1))
                 logger.info(f"{log_pfx} Server requested wait period of {wait_seconds} seconds (cycle {wait_cycles}/{MAX_WAIT_CYCLES}).")
-                sleepbar(wait_seconds + 2, prefix="Server-enforced wait (+2s)", logger=logger)
+                sleepbar(wait_seconds + 10, prefix="Server-enforced wait (+10s)", logger=logger)
                 continue
             else:
                 raise IOError("Server responded with 'wait_sec' in URL but no numeric value was found.")
